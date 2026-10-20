@@ -1,4 +1,6 @@
-# Локальный стенд: Nginx (TLS) → backend → PostgreSQL 15 + Redis
+# Локальный стенд (ветка `macos`): Nginx (TLS) → backend → PostgreSQL 15 + Redis
+
+> Ветка для **macOS** (Docker Desktop). Для Ubuntu 22.04 см. ветку `ubuntu`, обзор — в `main`.
 
 ```
 клиент ──https:443──▶ nginx ──http──▶ backend:8080 ──▶ postgres:5432
@@ -8,7 +10,7 @@
 Наружу опубликован только nginx (`:443`). Backend, Postgres и Redis доступны только внутри docker-сети.
 
 ## Требования
-Docker 24+ с плагином Compose v2, `openssl`, `curl`. Работает на macOS и Ubuntu.
+macOS 12+ (Intel или Apple Silicon), **Docker Desktop** (уже включает Compose v2), `openssl` и `curl` (есть в системе; LibreSSL из macOS поддерживает `-addext`).
 Порт 443 должен быть свободен (иначе поменяйте `HTTPS_PORT` в `.env`, напр. `8443`).
 
 ## Запуск
@@ -45,3 +47,9 @@ head -c 11000000 /dev/zero | curl -sk -o /dev/null -w '%{http_code}\n' \
 seq 100 | xargs -P100 -I{} curl -sk -o /dev/null -w '%{http_code}\n' \
      https://localhost/ | sort | uniq -c                                # часть ответов 429 (rate limit)
 ```
+
+## Особенности macOS
+- Docker работает внутри виртуальной машины Docker Desktop, поэтому в логах и `X-Forwarded-For` клиент виден как адрес шлюза VM (например `192.168.65.1`), а не `127.0.0.1`. Это нормально.
+- Порт 443 на macOS публикуется без `sudo` (Docker Desktop сам занимает привилегированные порты).
+- Образы мультиархитектурные (`nginx`, `postgres`, `redis`, `python`), на Apple Silicon запускаются нативно.
+- Если сертификат нужно доверить в браузере: `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain nginx/certs/server.crt`.
