@@ -1,4 +1,6 @@
-# Локальный стенд: Nginx (TLS) → backend → PostgreSQL 15 + Redis
+# Локальный стенд (ветка `ubuntu`): Nginx (TLS) → backend → PostgreSQL 15 + Redis
+
+> Ветка для **Ubuntu 22.04 LTS**. Для macOS см. ветку `macos`, обзор — в `main`.
 
 ```
 клиент ──https:443──▶ nginx ──http──▶ backend:8080 ──▶ postgres:5432
@@ -8,12 +10,13 @@
 Наружу опубликован только nginx (`:443`). Backend, Postgres и Redis доступны только внутри docker-сети.
 
 ## Требования
-Docker 24+ с плагином Compose v2, `openssl`, `curl`. Работает на macOS и Ubuntu.
+Ubuntu 22.04 (jammy), доступ к `sudo`, интернет. Docker Engine 24+ с Compose v2 ставится скриптом `setup-ubuntu.sh` (если уже стоит — пропустит). Пакет `docker.io` из apt не подходит — в нём нет `docker compose`.
 Порт 443 должен быть свободен (иначе поменяйте `HTTPS_PORT` в `.env`, напр. `8443`).
 
 ## Запуск
 
 ```bash
+./setup-ubuntu.sh               # Docker + Compose v2 (один раз), затем перелогиньтесь
 ./gen-certs.sh                  # self-signed сертификат -> nginx/certs/
 docker compose up -d --build    # старт; ждёт healthy у зависимостей
 docker compose ps               # все 4 сервиса должны быть (healthy)
@@ -45,3 +48,11 @@ head -c 11000000 /dev/zero | curl -sk -o /dev/null -w '%{http_code}\n' \
 seq 100 | xargs -P100 -I{} curl -sk -o /dev/null -w '%{http_code}\n' \
      https://localhost/ | sort | uniq -c                                # часть ответов 429 (rate limit)
 ```
+
+## Особенности Ubuntu
+- Docker работает нативно, без VM: в `X-Forwarded-For` виден реальный адрес клиента.
+- Порт 443 публикует демон Docker (root), `sudo` для запуска `docker compose` не нужен после добавления в группу `docker` (`setup-ubuntu.sh` делает это сам; потребуется перелогин).
+- Если включён `ufw`: `sudo ufw allow 443/tcp`. Docker вносит правила в iptables в обход ufw, поэтому порт 443 может быть открыт наружу и при включённом ufw — учитывайте это на машине с публичным IP.
+- Для доступа не только с localhost добавьте имя/IP сервера в сертификат: `SAN_EXTRA="DNS:stand.example.com,IP:10.0.0.5" ./gen-certs.sh`.
+- Если 443 занят (`sudo ss -ltnp | grep :443`), поменяйте `HTTPS_PORT` в `.env`.
+- Сертификат можно доверить системе: `sudo cp nginx/certs/server.crt /usr/local/share/ca-certificates/stand.crt && sudo update-ca-certificates`.
